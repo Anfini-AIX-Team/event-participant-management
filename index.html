@@ -3,12 +3,918 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="refresh" content="0; url=https://event.anfini-aix.com/">
-<link rel="canonical" href="https://event.anfini-aix.com/">
 <title>イベント参加者変更管理</title>
-<script>location.replace("https://event.anfini-aix.com/");</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f0f2f5;
+  --surface: #ffffff;
+  --border: #e5e7eb;
+  --accent: #1d4ed8;
+  --accent-light: #dbeafe;
+  --text-primary: #1a1d23;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+}
+body {
+  font-family: 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header（共通フォーマット：高さ68px固定、ロゴ36px、タイトル16px/600） ── */
+header.app-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+  height: 68px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 20;
+}
+.logo { display: flex; align-items: center; gap: 12px; height: 36px; }
+.logo-badge {
+  width: 36px; height: 36px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  flex: none;
+}
+.logo-badge svg { width: 22px; height: 22px; }
+.app-title { font-size: 16px; font-weight: 600; color: var(--text-primary); margin: 0 20px 0 0; white-space: nowrap; line-height: 1; }
+.header-center { display: flex; align-items: center; height: 36px; }
+.header-right { margin-left: auto; display: flex; align-items: center; height: 36px; gap: 12px; }
+
+.file-badges { display: flex; gap: 8px; align-items: center; }
+.file-badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 600; font-family: monospace; }
+.badge-old { background: #f3f4f6; color: #6b7280; }
+.badge-new { background: var(--accent-light); color: var(--accent); }
+.badge-arrow { color: var(--text-muted); font-size: 13px; }
+
+.portal-btn {
+  height: 32px; box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  background: none; border: 1px solid var(--border); border-radius: 8px;
+  padding: 0 12px; cursor: pointer; transition: background .15s, color .15s;
+}
+.portal-btn:hover { background: #f3f4f6; color: var(--text-primary); }
+
+/* ── App layout ── */
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: calc(100vh - 68px);
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-head {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sidebar-head h2 { font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; }
+.clear-history-btn {
+  font-size: 11px; color: #9ca3af; background: none; border: none;
+  cursor: pointer; padding: 2px 6px; border-radius: 4px;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.clear-history-btn:hover { background: #fee2e2; color: #dc2626; }
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.history-empty {
+  padding: 32px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #d1d5db;
+}
+.history-empty .he-icon { margin-bottom: 8px; display: flex; justify-content: center; }
+
+.h-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background .12s;
+  position: relative;
+}
+.h-item:hover { background: #f9fafb; }
+.h-item.active { background: #eff6ff; border-left-color: #3b82f6; }
+.h-item-date { font-size: 10px; color: #9ca3af; margin-bottom: 3px; }
+.h-item-files {
+  font-size: 12px; font-weight: 600; color: #374151;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 5px;
+}
+.h-item-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.h-badge {
+  font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;
+}
+.h-badge-added   { background: #dcfce7; color: #15803d; }
+.h-badge-removed { background: #fee2e2; color: #dc2626; }
+.h-badge-date    { background: #fef9c3; color: #a16207; }
+.h-badge-status  { background: #ede9fe; color: #7c3aed; }
+.h-item-del {
+  position: absolute; top: 8px; right: 8px;
+  background: none; border: none;
+  color: #d1d5db; cursor: pointer; padding: 2px 4px;
+  border-radius: 4px; display: none;
+}
+.h-item:hover .h-item-del { display: block; }
+.h-item-del:hover { background: #fee2e2; color: #dc2626; }
+
+/* ── Main content ── */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Upload screen ── */
+#uploadScreen { max-width: 640px; margin: 40px auto; padding: 0 24px; width: 100%; }
+.upload-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+.upload-sub { font-size: 13px; color: #6b7280; margin-bottom: 24px; line-height: 1.6; }
+.upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.drop-zone {
+  background: #f9fafb;
+  border: 2px dashed #d1d5db;
+  border-radius: 14px;
+  padding: 28px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  position: relative;
+}
+.drop-zone:hover { border-color: #4f8ef7; background: #f0f5ff; }
+.drop-zone.loaded { border-color: #22c55e; border-style: solid; background: #f0fdf4; }
+.dz-icon { margin-bottom: 8px; display: flex; justify-content: center; color: #6b7280; }
+.dz-label { font-size: 13px; color: #374151; font-weight: 600; margin-bottom: 4px; }
+.dz-sub { font-size: 12px; color: #9ca3af; }
+.dz-file { font-size: 11px; color: #16a34a; font-weight: 600; margin-top: 8px; word-break: break-all; }
+input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.dz-delete {
+  position: absolute; top: 8px; right: 8px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fee2e2; color: #dc2626;
+  border: none;
+  cursor: pointer; display: none; align-items: center; justify-content: center;
+  z-index: 10;
+}
+.dz-delete:hover { background: #fca5a5; }
+.drop-zone.loaded .dz-delete { display: flex; }
+
+.key-section {
+  background: #fff; border-radius: 12px;
+  padding: 16px 18px; margin-bottom: 14px;
+  border: 1px solid #e5e7eb;
+  display: none;
+}
+.key-section h3 { font-size: 12px; font-weight: 700; color: #6b7280; margin-bottom: 10px; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 5px; }
+.key-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.key-chip {
+  display: flex; align-items: center; gap: 5px;
+  background: #f3f4f6; border-radius: 20px;
+  padding: 4px 12px; font-size: 12px; cursor: pointer;
+  border: 2px solid transparent; transition: .15s;
+}
+.key-chip:hover { border-color: #4f8ef7; }
+.key-chip input { display: none; }
+.key-chip.checked { background: #dbeafe; border-color: #4f8ef7; color: #1d4ed8; font-weight: 600; }
+
+.run-btn {
+  display: none; width: 100%;
+  background: #1d4ed8; color: #fff;
+  border: none; border-radius: 12px;
+  padding: 14px; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: background .2s;
+}
+.run-btn:hover { background: #1e40af; }
+
+/* ── Result screen ── */
+#resultScreen { display: none; flex: 1; flex-direction: column; }
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 20px 24px 0;
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+}
+.stat {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 18px;
+  border-top: 4px solid transparent;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  user-select: none;
+}
+.stat:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.1); }
+.stat.active { outline: 2px solid #4f8ef7; outline-offset: 2px; }
+.stat-added   { border-color: #22c55e; }
+.stat-removed { border-color: #ef4444; }
+.stat-date    { border-color: #f59e0b; }
+.stat-status  { border-color: #8b5cf6; }
+.stat-num { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+.stat-added   .stat-num { color: #16a34a; }
+.stat-removed .stat-num { color: #dc2626; }
+.stat-date    .stat-num { color: #d97706; }
+.stat-status  .stat-num { color: #7c3aed; }
+.stat-label { font-size: 11px; color: #6b7280; margin-top: 5px; }
+.stat-sub   { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+
+.section { max-width: 860px; margin: 20px auto 0; padding: 0 24px 40px; display: none; width: 100%; }
+.section.active { display: block; }
+.section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.section-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; }
+.section-count {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 20px;
+  background: #f3f4f6; color: #374151;
+}
+
+.cards { display: flex; flex-direction: column; gap: 8px; }
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  border-left: 4px solid transparent;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 10px;
+  align-items: start;
+}
+.card-added   { border-color: #22c55e; }
+.card-removed { border-color: #ef4444; }
+.card-date    { border-color: #f59e0b; }
+.card-status  { border-color: #8b5cf6; }
+.card-icon {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.card-added   .card-icon { background: #dcfce7; color: #16a34a; }
+.card-removed .card-icon { background: #fee2e2; color: #dc2626; }
+.card-date    .card-icon { background: #fef3c7; color: #d97706; }
+.card-status  .card-icon { background: #ede9fe; color: #7c3aed; }
+.card-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.card-meta { font-size: 12px; color: #6b7280; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.card-meta span { display: inline-flex; align-items: center; gap: 3px; }
+.card-id { font-size: 10px; color: #9ca3af; font-family: monospace; white-space: nowrap; }
+
+.date-change {
+  margin-top: 6px; background: #fffbeb; border-radius: 6px;
+  padding: 6px 10px; font-size: 12px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.date-old { color: #ef4444; text-decoration: line-through; }
+.date-new { color: #16a34a; font-weight: 600; }
+
+.status-change {
+  margin-top: 6px; font-size: 12px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.pill { padding: 2px 9px; border-radius: 20px; font-weight: 600; font-size: 11px; }
+.pill-cancel  { background: #fee2e2; color: #dc2626; }
+.pill-applied { background: #dcfce7; color: #16a34a; }
+.pill-other   { background: #f3f4f6; color: #374151; }
+
+.empty { text-align: center; padding: 40px 20px; color: #9ca3af; font-size: 13px; }
+.empty-icon { margin-bottom: 10px; display: flex; justify-content: center; }
+
+.back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 16px 24px 0;
+  background: none; border: 1px solid #d1d5db;
+  border-radius: 8px; padding: 6px 12px;
+  font-size: 12px; cursor: pointer; color: #374151;
+  align-self: flex-start;
+}
+.back-btn:hover { background: #f3f4f6; }
+
+@media (max-width: 700px) {
+  .sidebar { display: none; }
+  .upload-grid { grid-template-columns: 1fr; }
+  .summary { grid-template-columns: 1fr 1fr; }
+  .card { grid-template-columns: 34px 1fr; }
+  .card-id { display: none; }
+}
+</style>
 </head>
 <body>
-<a href="https://event.anfini-aix.com/">https://event.anfini-aix.com/</a>
+
+<header class="app-header">
+  <div class="logo">
+    <span class="logo-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+      </svg>
+    </span>
+    <h1 class="app-title">イベント参加者変更管理</h1>
+  </div>
+
+  <div class="header-center">
+    <div class="file-badges" id="headerBadges" style="display:none">
+      <span class="file-badge badge-old" id="badge1">—</span>
+      <span class="badge-arrow">→</span>
+      <span class="file-badge badge-new" id="badge2">—</span>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <button class="portal-btn" onclick="if(window.opener && !window.opener.closed){ window.opener.focus(); window.close(); } else { window.location.href='https://anfini-aix-team.github.io/Top/'; }">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+      ポータルへ戻る
+    </button>
+  </div>
+</header>
+
+<div class="app-body">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <h2>比較履歴</h2>
+      <button class="clear-history-btn" onclick="clearAllHistory()" title="履歴をすべて削除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>全削除</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty" id="historyEmpty">
+        <div class="he-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
+        比較履歴がありません
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN ═══ -->
+  <main class="main">
+
+    <!-- Upload -->
+    <div id="uploadScreen">
+      <div class="upload-title">2つのファイルをアップロード</div>
+      <div class="upload-sub">旧ファイル（Before）と新ファイル（After）を選択すると、増えた候補者・減った候補者・日程変更を自動で検出します。<br>対応ファイル：.csv / .xlsx / .xls</div>
+
+      <div class="upload-grid">
+        <div class="drop-zone" id="dz1">
+          <button class="dz-delete" onclick="clearFile(event,1)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+          <div class="dz-icon" id="dzIcon1"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
+          <div class="dz-label">旧ファイル（Before）</div>
+          <div class="dz-sub">CSV / Excel をアップロード</div>
+          <div class="dz-file" id="fn1"></div>
+          <input type="file" id="f1" accept=".csv,.xlsx,.xls" onchange="onFile(1)">
+        </div>
+        <div class="drop-zone" id="dz2">
+          <button class="dz-delete" onclick="clearFile(event,2)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+          <div class="dz-icon" id="dzIcon2"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
+          <div class="dz-label">新ファイル（After）</div>
+          <div class="dz-sub">CSV / Excel をアップロード</div>
+          <div class="dz-file" id="fn2"></div>
+          <input type="file" id="f2" accept=".csv,.xlsx,.xls" onchange="onFile(2)">
+        </div>
+      </div>
+
+      <div class="key-section" id="keySection">
+        <h3><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4a5 5 0 1 0-7 7L4 19v3h3l8-8"></path><path d="m14.5 6.5 3 3"></path></svg>行の同一性を判定するキー列（複数選択可）</h3>
+        <div class="key-chips" id="keyChips"></div>
+      </div>
+      <button class="run-btn" id="runBtn" onclick="runDiff()">差分を分析する →</button>
+    </div>
+
+    <!-- Result -->
+    <div id="resultScreen">
+      <button class="back-btn" onclick="goUpload()">← 別のファイルを比較</button>
+
+      <div class="summary">
+        <div class="stat stat-added" onclick="showSec('added')">
+          <div class="stat-num" id="n-added">—</div>
+          <div class="stat-label">新規申込</div>
+          <div class="stat-sub">増えた候補者</div>
+        </div>
+        <div class="stat stat-removed" onclick="showSec('removed')">
+          <div class="stat-num" id="n-removed">—</div>
+          <div class="stat-label">キャンセル・離脱</div>
+          <div class="stat-sub">減った候補者</div>
+        </div>
+        <div class="stat stat-date" onclick="showSec('date')">
+          <div class="stat-num" id="n-date">—</div>
+          <div class="stat-label">日程変更</div>
+          <div class="stat-sub">開催日時が変わった</div>
+        </div>
+        <div class="stat stat-status" onclick="showSec('status')">
+          <div class="stat-num" id="n-status">—</div>
+          <div class="stat-label">ステータス変更</div>
+          <div class="stat-sub">申込状況が変わった</div>
+        </div>
+      </div>
+
+      <div class="section active" id="sec-added">
+        <div class="section-head">
+          <span class="section-title"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#22c55e;margin-right:7px;flex:none;"></span>新規申込（増えた候補者）</span>
+          <span class="section-count" id="sc-added"></span>
+        </div>
+        <div class="cards" id="cards-added"></div>
+      </div>
+      <div class="section" id="sec-removed">
+        <div class="section-head">
+          <span class="section-title"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#ef4444;margin-right:7px;flex:none;"></span>キャンセル・離脱（減った候補者）</span>
+          <span class="section-count" id="sc-removed"></span>
+        </div>
+        <div class="cards" id="cards-removed"></div>
+      </div>
+      <div class="section" id="sec-date">
+        <div class="section-head">
+          <span class="section-title"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f59e0b;margin-right:7px;flex:none;"></span>日程変更</span>
+          <span class="section-count" id="sc-date"></span>
+        </div>
+        <div class="cards" id="cards-date"></div>
+      </div>
+      <div class="section" id="sec-status">
+        <div class="section-head">
+          <span class="section-title"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#8b5cf6;margin-right:7px;flex:none;"></span>ステータス変更</span>
+          <span class="section-count" id="sc-status"></span>
+        </div>
+        <div class="cards" id="cards-status"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  ICONS（絵文字を廃止し、統一されたラインアイコンに置き換え）
+// ══════════════════════════════════════════════════════
+function icon(name, size) {
+  size = size || 16;
+  const paths = {
+    x: '<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>',
+    fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line>',
+    barChart: '<line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line>',
+    calendar: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>',
+    clipboardList: '<rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><line x1="9" y1="12" x2="15" y2="12"></line><line x1="9" y1="16" x2="15" y2="16"></line>',
+    mail: '<rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m22 6-10 7L2 6"></path>',
+    checkCircle: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>',
+    clock: '<circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>',
+    refreshCw: '<polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>',
+    bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path>',
+    plus: '<line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>',
+    minus: '<line x1="5" y1="12" x2="19" y2="12"></line>',
+    key: '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4a5 5 0 1 0-7 7L4 19v3h3l8-8"></path><path d="m14.5 6.5 3 3"></path>'
+  };
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;flex:none">${paths[name]||''}</svg>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  HISTORY  (localStorage)
+// ══════════════════════════════════════════════════════
+const STORAGE_KEY = 'ow_diff_history';
+let activeHistoryId = null;
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+  catch { return []; }
+}
+function saveHistory(hist) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(hist));
+}
+
+function pushHistory(entry) {
+  // entry: { id, ts, file1, file2, counts, result }
+  const hist = loadHistory();
+  hist.unshift(entry);
+  if (hist.length > 30) hist.length = 30;   // keep max 30
+  saveHistory(hist);
+  renderHistory();
+}
+
+function deleteHistoryItem(id, e) {
+  e.stopPropagation();
+  const hist = loadHistory().filter(h => h.id !== id);
+  saveHistory(hist);
+  if (activeHistoryId === id) goUpload();
+  renderHistory();
+}
+
+function clearAllHistory() {
+  if (!confirm('履歴をすべて削除しますか？')) return;
+  saveHistory([]);
+  goUpload();
+  renderHistory();
+}
+
+function renderHistory() {
+  const hist = loadHistory();
+  const list = document.getElementById('historyList');
+  const empty = document.getElementById('historyEmpty');
+  if (!hist.length) {
+    empty.style.display = 'block';
+    // remove old items
+    [...list.querySelectorAll('.h-item')].forEach(el => el.remove());
+    return;
+  }
+  empty.style.display = 'none';
+
+  // rebuild
+  [...list.querySelectorAll('.h-item')].forEach(el => el.remove());
+  hist.forEach(h => {
+    const div = document.createElement('div');
+    div.className = 'h-item' + (h.id === activeHistoryId ? ' active' : '');
+    div.dataset.id = h.id;
+    const d = new Date(h.ts);
+    const dateStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const badges = [
+      h.counts.added   ? `<span class="h-badge h-badge-added">+${h.counts.added}</span>` : '',
+      h.counts.removed ? `<span class="h-badge h-badge-removed">-${h.counts.removed}</span>` : '',
+      h.counts.date    ? `<span class="h-badge h-badge-date">日程${h.counts.date}</span>` : '',
+      h.counts.status  ? `<span class="h-badge h-badge-status">状態${h.counts.status}</span>` : '',
+    ].filter(Boolean).join('');
+    div.innerHTML = `
+      <div class="h-item-date">${dateStr}</div>
+      <div class="h-item-files">${esc(h.file1)} → ${esc(h.file2)}</div>
+      <div class="h-item-badges">${badges || '<span style="font-size:10px;color:#d1d5db">差分なし</span>'}</div>
+      <button class="h-item-del" title="削除">${icon('x',13)}</button>`;
+    div.querySelector('.h-item-del').onclick = (e) => deleteHistoryItem(h.id, e);
+    div.onclick = () => restoreHistory(h.id);
+    list.appendChild(div);
+  });
+}
+
+function restoreHistory(id) {
+  const hist = loadHistory();
+  const entry = hist.find(h => h.id === id);
+  if (!entry) return;
+  activeHistoryId = id;
+  renderHistory();
+
+  // restore header badges
+  document.getElementById('badge1').textContent = entry.file1;
+  document.getElementById('badge2').textContent = entry.file2;
+  document.getElementById('headerBadges').style.display = 'flex';
+
+  // restore counts
+  document.getElementById('n-added').textContent   = entry.counts.added;
+  document.getElementById('n-removed').textContent = entry.counts.removed;
+  document.getElementById('n-date').textContent    = entry.counts.date;
+  document.getElementById('n-status').textContent  = entry.counts.status;
+  document.getElementById('sc-added').textContent   = entry.counts.added + '件';
+  document.getElementById('sc-removed').textContent = entry.counts.removed + '件';
+  document.getElementById('sc-date').textContent    = entry.counts.date + '件';
+  document.getElementById('sc-status').textContent  = entry.counts.status + '件';
+
+  // restore cards HTML
+  document.getElementById('cards-added').innerHTML   = entry.result.added;
+  document.getElementById('cards-removed').innerHTML = entry.result.removed;
+  document.getElementById('cards-date').innerHTML    = entry.result.date;
+  document.getElementById('cards-status').innerHTML  = entry.result.status;
+
+  document.getElementById('uploadScreen').style.display = 'none';
+  document.getElementById('resultScreen').style.display = 'flex';
+  showSec('added');
+}
+
+// ══════════════════════════════════════════════════════
+//  FILE PARSING
+// ══════════════════════════════════════════════════════
+function parseFile(file, callback) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  if (ext === 'csv') {
+    reader.onload = e => callback(parseCSV(e.target.result));
+    reader.readAsText(file, 'UTF-8');
+  } else {
+    reader.onload = e => {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+      if (!raw.length) return callback({ headers: [], rows: [] });
+      const headers = Object.keys(raw[0]);
+      const rows = raw.map(r => {
+        const obj = {};
+        headers.forEach(h => obj[h] = String(r[h] ?? '').trim());
+        return obj;
+      });
+      callback({ headers, rows });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/);
+  const headers = splitLine(lines[0]);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const vals = splitLine(lines[i]);
+    const obj = {};
+    headers.forEach((h, j) => obj[h] = (vals[j] ?? '').trim());
+    rows.push(obj);
+  }
+  return { headers, rows };
+}
+
+function splitLine(line) {
+  const res = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+    else if (c === ',' && !inQ) { res.push(cur); cur = ''; }
+    else cur += c;
+  }
+  res.push(cur);
+  return res;
+}
+
+function fileIconSvg(name) {
+  const ext = (name || '').split('.').pop().toLowerCase();
+  return (ext === 'xlsx' || ext === 'xls') ? icon('barChart', 28) : icon('fileText', 28);
+}
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let csv1 = null, csv2 = null;
+let selectedKeys = new Set();
+let fileNames = ['', ''];
+
+function clearFile(e, slot) {
+  e.preventDefault(); e.stopPropagation();
+  if (slot === 1) csv1 = null; else csv2 = null;
+  fileNames[slot - 1] = '';
+  document.getElementById('f' + slot).value = '';
+  document.getElementById('fn' + slot).textContent = '';
+  document.getElementById('dz' + slot).classList.remove('loaded');
+  document.getElementById('dzIcon' + slot).innerHTML = icon('fileText', 28);
+  document.getElementById('keySection').style.display = 'none';
+  document.getElementById('runBtn').style.display = 'none';
+}
+
+function onFile(slot) {
+  const file = document.getElementById('f' + slot).files[0];
+  if (!file) return;
+  fileNames[slot - 1] = file.name.replace(/\.(csv|xlsx|xls)$/i, '').replace(/_/g, ' ');
+  document.getElementById('dzIcon' + slot).innerHTML = fileIconSvg(file.name);
+  parseFile(file, parsed => {
+    if (slot === 1) csv1 = parsed; else csv2 = parsed;
+    document.getElementById('fn' + slot).textContent = file.name;
+    document.getElementById('dz' + slot).classList.add('loaded');
+    if (csv1 && csv2) setupKeys();
+  });
+}
+
+function setupKeys() {
+  const allH = [...new Set([...csv1.headers, ...csv2.headers])];
+  const auto = allH.filter(h => /id|ID|番号|コード/i.test(h));
+  selectedKeys = new Set(auto.length ? [auto[0]] : [allH[0]]);
+  const chips = document.getElementById('keyChips');
+  chips.innerHTML = '';
+  allH.forEach(h => {
+    const div = document.createElement('div');
+    div.className = 'key-chip' + (selectedKeys.has(h) ? ' checked' : '');
+    div.innerHTML = `<input type="checkbox" ${selectedKeys.has(h) ? 'checked' : ''}><span>${esc(h)}</span>`;
+    div.onclick = () => {
+      if (selectedKeys.has(h)) { if (selectedKeys.size > 1) { selectedKeys.delete(h); div.classList.remove('checked'); } }
+      else { selectedKeys.add(h); div.classList.add('checked'); }
+    };
+    chips.appendChild(div);
+  });
+  document.getElementById('keySection').style.display = 'block';
+  document.getElementById('runBtn').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════
+//  DIFF
+// ══════════════════════════════════════════════════════
+function getKey(row, keys) { return [...keys].map(k => row[k] ?? '').join('||'); }
+function normDate(s) {
+  try { return new Date(String(s).trim()).getTime(); } catch { return null; }
+}
+
+function runDiff() {
+  const keys = [...selectedKeys];
+  const map1 = new Map();
+  csv1.rows.forEach(r => map1.set(getKey(r, keys), r));
+  const map2 = new Map();
+  csv2.rows.forEach(r => map2.set(getKey(r, keys), r));
+
+  const allH = [...new Set([...csv1.headers, ...csv2.headers])];
+  const dateCol   = allH.find(h => /開催.*日時|日程|日時/.test(h)) || null;
+  const statusCol = allH.find(h => /申込ステータス$/.test(h)) || null;
+  const nameCol   = allH.find(h => /候補者氏名$|名前|氏名/.test(h)) || null;
+  const emailCol  = allH.find(h => /メール|email/i.test(h)) || null;
+  const eventCol  = allH.find(h => /イベント名/.test(h)) || null;
+  const updCol    = allH.find(h => /更新日時/.test(h)) || null;
+  const cols = { nameCol, emailCol, eventCol, dateCol, updCol };
+
+  const added = [], removed = [], dateChanged = [], statusChanged = [];
+
+  csv2.rows.forEach(r2 => { if (!map1.has(getKey(r2, keys))) added.push(r2); });
+  csv1.rows.forEach(r1 => { if (!map2.has(getKey(r1, keys))) removed.push(r1); });
+  csv2.rows.forEach(r2 => {
+    const k = getKey(r2, keys);
+    if (!map1.has(k)) return;
+    const r1 = map1.get(k);
+    if (dateCol) {
+      const d1 = normDate(r1[dateCol]), d2 = normDate(r2[dateCol]);
+      if (d1 && d2 && d1 !== d2) dateChanged.push({ r1, r2 });
+    }
+    if (statusCol) {
+      const s1 = (r1[statusCol] ?? '').trim(), s2 = (r2[statusCol] ?? '').trim();
+      if (s1 !== s2) statusChanged.push({ r1, r2, s1, s2 });
+    }
+  });
+
+  const counts = { added: added.length, removed: removed.length, date: dateChanged.length, status: statusChanged.length };
+
+  document.getElementById('n-added').textContent   = counts.added;
+  document.getElementById('n-removed').textContent = counts.removed;
+  document.getElementById('n-date').textContent    = counts.date;
+  document.getElementById('n-status').textContent  = counts.status;
+  document.getElementById('sc-added').textContent   = counts.added + '件';
+  document.getElementById('sc-removed').textContent = counts.removed + '件';
+  document.getElementById('sc-date').textContent    = counts.date + '件';
+  document.getElementById('sc-status').textContent  = counts.status + '件';
+
+  document.getElementById('badge1').textContent = fileNames[0] || 'Before';
+  document.getElementById('badge2').textContent = fileNames[1] || 'After';
+  document.getElementById('headerBadges').style.display = 'flex';
+
+  renderCards('cards-added', added, 'added', cols);
+  renderCards('cards-removed', removed, 'removed', cols);
+  renderDateCards('cards-date', dateChanged, cols);
+  renderStatusCards('cards-status', statusChanged, cols);
+
+  // save to history
+  const id = Date.now().toString();
+  activeHistoryId = id;
+  pushHistory({
+    id, ts: Date.now(),
+    file1: fileNames[0] || 'Before',
+    file2: fileNames[1] || 'After',
+    counts,
+    result: {
+      added:   document.getElementById('cards-added').innerHTML,
+      removed: document.getElementById('cards-removed').innerHTML,
+      date:    document.getElementById('cards-date').innerHTML,
+      status:  document.getElementById('cards-status').innerHTML,
+    }
+  });
+
+  document.getElementById('uploadScreen').style.display = 'none';
+  document.getElementById('resultScreen').style.display = 'flex';
+  showSec('added');
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER CARDS
+// ══════════════════════════════════════════════════════
+function renderCards(containerId, rows, type, cols) {
+  const el = document.getElementById(containerId);
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">${icon('checkCircle',32)}</div>該当する候補者はいません</div>`;
+    return;
+  }
+  const icons = { added: icon('plus',16), removed: icon('minus',16) };
+  el.innerHTML = rows.map(r => {
+    const name    = cols.nameCol  ? esc(r[cols.nameCol]  || '—') : '—';
+    const event   = cols.eventCol ? esc(r[cols.eventCol] || '')  : '';
+    const date    = cols.dateCol  ? esc(r[cols.dateCol]  || '')  : '';
+    const email   = cols.emailCol ? esc(r[cols.emailCol] || '')  : '';
+    const updated = cols.updCol   ? esc(r[cols.updCol]   || '')  : '';
+    const id      = [...selectedKeys].map(k => esc(r[k] || '')).join(' / ');
+    return `<div class="card card-${type}">
+      <div class="card-icon">${icons[type]}</div>
+      <div>
+        <div class="card-name">${name}</div>
+        <div class="card-meta">
+          ${date  ? `<span>${icon('calendar',12)} ${date}</span>` : ''}
+          ${event ? `<span>${icon('clipboardList',12)} ${event}</span>` : ''}
+          ${email ? `<span>${icon('mail',12)} ${email}</span>` : ''}
+        </div>
+        ${updated ? `<div class="card-meta" style="margin-top:4px;color:#9ca3af">申込更新: ${updated}</div>` : ''}
+      </div>
+      <div class="card-id">${id}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderDateCards(containerId, items, cols) {
+  const el = document.getElementById(containerId);
+  if (!items.length) { el.innerHTML = `<div class="empty"><div class="empty-icon">${icon('calendar',32)}</div>日程変更はありません</div>`; return; }
+  el.innerHTML = items.map(({ r1, r2 }) => {
+    const name  = cols.nameCol  ? esc(r2[cols.nameCol]  || '—') : '—';
+    const event = cols.eventCol ? esc(r2[cols.eventCol] || '') : '';
+    const email = cols.emailCol ? esc(r2[cols.emailCol] || '') : '';
+    const od    = cols.dateCol  ? esc(r1[cols.dateCol]  || '') : '';
+    const nd    = cols.dateCol  ? esc(r2[cols.dateCol]  || '') : '';
+    const id    = [...selectedKeys].map(k => esc(r2[k] || '')).join(' / ');
+    return `<div class="card card-date">
+      <div class="card-icon">${icon('refreshCw',16)}</div>
+      <div>
+        <div class="card-name">${name}</div>
+        <div class="card-meta">
+          ${event ? `<span>${icon('clipboardList',12)} ${event}</span>` : ''}
+          ${email ? `<span>${icon('mail',12)} ${email}</span>` : ''}
+        </div>
+        <div class="date-change">
+          <span class="date-old">${od}</span>
+          <span style="color:#9ca3af">→</span>
+          <span class="date-new">${nd}</span>
+        </div>
+      </div>
+      <div class="card-id">${id}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderStatusCards(containerId, items, cols) {
+  const el = document.getElementById(containerId);
+  if (!items.length) { el.innerHTML = `<div class="empty"><div class="empty-icon">${icon('bell',32)}</div>ステータス変更はありません</div>`; return; }
+  el.innerHTML = items.map(({ r1, r2, s1, s2 }) => {
+    const name  = cols.nameCol  ? esc(r2[cols.nameCol]  || '—') : '—';
+    const event = cols.eventCol ? esc(r2[cols.eventCol] || '') : '';
+    const date  = cols.dateCol  ? esc(r2[cols.dateCol]  || '') : '';
+    const email = cols.emailCol ? esc(r2[cols.emailCol] || '') : '';
+    const id    = [...selectedKeys].map(k => esc(r2[k] || '')).join(' / ');
+    const pc = s => /キャンセル/.test(s) ? 'pill-cancel' : /申し込み/.test(s) ? 'pill-applied' : 'pill-other';
+    return `<div class="card card-status">
+      <div class="card-icon">${icon('bell',16)}</div>
+      <div>
+        <div class="card-name">${name}</div>
+        <div class="card-meta">
+          ${date  ? `<span>${icon('calendar',12)} ${date}</span>` : ''}
+          ${event ? `<span>${icon('clipboardList',12)} ${event}</span>` : ''}
+          ${email ? `<span>${icon('mail',12)} ${email}</span>` : ''}
+        </div>
+        <div class="status-change">
+          <span class="pill ${pc(s1)}">${esc(s1)}</span>
+          <span style="color:#9ca3af">→</span>
+          <span class="pill ${pc(s2)}">${esc(s2)}</span>
+        </div>
+      </div>
+      <div class="card-id">${id}</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════════════════
+function showSec(tab) {
+  ['added','removed','date','status'].forEach(s => {
+    document.getElementById('sec-' + s).classList.remove('active');
+    document.querySelector('.stat-' + s).classList.remove('active');
+  });
+  document.getElementById('sec-' + tab).classList.add('active');
+  document.querySelector('.stat-' + tab).classList.add('active');
+}
+
+function goUpload() {
+  activeHistoryId = null;
+  renderHistory();
+  csv1 = csv2 = null; selectedKeys = new Set(); fileNames = ['',''];
+  ['f1','f2'].forEach(id => document.getElementById(id).value = '');
+  ['fn1','fn2'].forEach(id => document.getElementById(id).textContent = '');
+  ['dz1','dz2'].forEach(id => document.getElementById(id).classList.remove('loaded'));
+  ['dzIcon1','dzIcon2'].forEach(id => document.getElementById(id).innerHTML = icon('fileText', 28));
+  document.getElementById('keySection').style.display = 'none';
+  document.getElementById('runBtn').style.display = 'none';
+  document.getElementById('headerBadges').style.display = 'none';
+  document.getElementById('uploadScreen').style.display = 'block';
+  document.getElementById('resultScreen').style.display = 'none';
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// init
+renderHistory();
+</script>
 </body>
 </html>
